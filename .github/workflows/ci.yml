@@ -1,0 +1,46 @@
+name: dbt CI
+
+on: 
+  pull_request:
+    branches:
+      - main
+jobs:
+  dbt-build:
+    name: Run dbt build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install dbt-core dbt-bigquery
+      
+      - name: Install dbt packages
+        working-directory: dbt_project
+        run: dbt deps
+      
+      - name: Write GCP service account key
+        run: |
+          echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY}}' > /tmp/gcp-key.json
+
+      - name: Write dbt profiles.yml
+        run: |
+          mkdir -p ~/.dbt
+          cat <<EOF > ~/.dbt/profiles.yml
+          nyc_analytics_project:
+            target: ci
+            outputs:
+              ci:
+                type: bigquery
+                ...
+                dataset: analytics_ci
+          EOF
+      
+      - name: Run dbt build
+        working-directory: dbt_project
+        run: dbt-build --target ci

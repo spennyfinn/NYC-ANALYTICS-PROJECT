@@ -2,6 +2,14 @@
 
 An end-to-end analytics engineering platform that ingests NYC 311 service request data into BigQuery, transforms it into a dimensional model using dbt, orchestrates the pipeline with Dagster, and tracks status history with a Type 2 slowly changing dimension.
 
+**[Live Dashboard →](https://datastudio.google.com/reporting/094bafae-f826-4fdf-915b-aeb815182555/page/qOC0F)**
+
+---
+
+## Lineage Graph
+
+![dbt Lineage Graph](dashboards/screenshots/lineage_graph.png)
+
 ---
 
 ## Architecture
