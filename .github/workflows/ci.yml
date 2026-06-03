@@ -31,23 +31,29 @@ jobs:
           echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > /tmp/gcp-key.json
 
       - name: Write dbt profiles.yml
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
           mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml << EOF
-          nyc_analytics_project:
+          python3 - <<'PYEOF'
+          import os
+          project_id = os.environ["GCP_PROJECT_ID"]
+          profiles = f"""nyc_analytics_project:
             target: ci
             outputs:
               ci:
                 type: bigquery
                 method: service-account
-                project: ${GCP_PROJECT_ID}
+                project: {project_id}
                 dataset: analytics_ci
                 keyfile: /tmp/gcp-key.json
                 location: US
                 threads: 4
-          EOF
+          """
+          with open(os.path.expanduser("~/.dbt/profiles.yml"), "w") as f:
+              f.write(profiles)
+          print(f"Written profiles.yml with project: {project_id}")
+          PYEOF
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Run dbt build
         working-directory: dbt_project
