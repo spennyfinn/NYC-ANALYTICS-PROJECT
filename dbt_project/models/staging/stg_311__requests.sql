@@ -1,3 +1,4 @@
+-- Select everything from our raw database
 with source as (
     select * from {{source('raw_311', 'service_requests_311')}}
 ), 
