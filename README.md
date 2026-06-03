@@ -54,6 +54,8 @@ Dagster: daily orchestration of ingestion + dbt build + snapshot
 | Warehouse | Google BigQuery |
 | Transformation | dbt-core + dbt-bigquery |
 | Orchestration | Dagster |
+| BI / Dashboard | Looker Studio |
+| CI | GitHub Actions |
 | Version Control | Git + GitHub |
 | Package Management | pip + requirements.txt |
 
@@ -253,9 +255,10 @@ nyc_analytics_project:
 
 ### 6. Create BigQuery datasets
 
-In the BigQuery console (or via `bq` CLI), create two datasets in your project:
-- `raw`
-- `analytics`
+In the BigQuery console (or via `bq` CLI), create three datasets in your project:
+- `raw` — landing zone for raw ingested data
+- `analytics` — dbt output (dev)
+- `analytics_ci` — dbt output for GitHub Actions CI runs
 
 ### 7. Run ingestion
 
@@ -290,6 +293,39 @@ Opens the Dagster UI at `http://localhost:3000`. From here you can:
 
 ---
 
+## Dashboard
+
+The live Looker Studio dashboard is connected directly to the BigQuery `analytics` dataset and presents the following KPIs:
+
+- **Complaint volume over time** — daily trend of 311 requests
+- **Top complaint types** — most frequent complaint categories
+- **Average resolution time by borough** — which boroughs get faster service
+- **Open vs resolved breakdown** — current request status split
+- **Headline scorecards** — total requests, average resolution time, number of agencies
+
+**[View Live Dashboard →](https://datastudio.google.com/reporting/094bafae-f826-4fdf-915b-aeb815182555/page/qOC0F)**
+
+---
+
+## CI / CD
+
+GitHub Actions runs `dbt build` automatically on every pull request targeting `main`. The workflow:
+
+1. Spins up an Ubuntu VM
+2. Installs Python 3.11 and dbt
+3. Writes BigQuery credentials from GitHub Secrets
+4. Runs `dbt build --target ci` against the `analytics_ci` dataset
+5. Reports pass/fail back to the PR
+
+To enable CI on a fork, add these two repository secrets under **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|---|---|
+| `GCP_PROJECT_ID` | Your GCP project ID |
+| `GCP_SERVICE_ACCOUNT_KEY` | Full contents of your service account JSON key |
+
+---
+
 ## Required Environment Variables
 
 | Variable | Description |
@@ -313,3 +349,7 @@ See `.env.example` for the template.
 **Surrogate keys via dbt_utils** — dimension keys are MD5 hashes of the natural key columns, generated with `dbt_utils.generate_surrogate_key()`. This is consistent, portable, and doesn't require a sequence or auto-increment.
 
 **SCD Type 2 via dbt snapshot** — `dim_status_scd2` uses dbt's native snapshot mechanism with `strategy='check'` on the `status` column. Every time a request's status changes, dbt closes the old record (`dbt_valid_to`) and inserts a new one, preserving full history.
+
+**BI-optimized view** — a `dashboard_view` in the `analytics` dataset pre-joins the fact table with all four dimensions into a single flat table. This eliminates the need for Looker Studio to perform live joins, making all dashboard charts load instantly.
+
+**Isolated CI dataset** — `dbt build` on pull requests targets `analytics_ci`, a separate BigQuery dataset from the dev `analytics` dataset. This ensures CI runs never overwrite production tables and can run in parallel safely.
