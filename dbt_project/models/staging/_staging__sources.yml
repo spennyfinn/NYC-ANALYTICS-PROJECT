@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: raw_311
+    database: nyc-analytics-platform
+    schema: raw
+    tables:
+      - name: service_requests_311
+        description: "Raw 311 service request records loaded from the NYC Socrata API"
