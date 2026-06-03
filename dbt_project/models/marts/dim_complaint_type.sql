@@ -10,7 +10,7 @@ deduped as (
 
 final as(
     select 
-        {{dbt_utils.generate_surrogate_key(['complaint_type'])}} as complaint_type_key,
+        {{dbt_utils.generate_surrogate_key(['complaint_type', 'descriptor'])}} as complaint_type_key,
         complaint_type,
         descriptor
     from deduped

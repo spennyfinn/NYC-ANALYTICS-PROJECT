@@ -1,31 +1,15 @@
-from datetime import datetime, timezone
-import os
+from dagster import asset
 from ingestion.socrata_client import fetch_pages
-
-from google.cloud import bigquery
+from ingestion.load_to_bigquery import add_timestamp, load_bigquery_client, load_data_into_bigquery
 from ingestion.config import GCP_PROJECT_ID
+from google.cloud import bigquery
+import os
+from dagster_dbt import DbtCliResource, dbt_assets, DbtProject
+from datetime import datetime, timedelta, timezone
 
-
-
-def add_timestamp(data: list[dict])-> list[dict]:
-    current_time = datetime.now(timezone.utc).isoformat()
-    for value in data:
-        value['_loaded_at']= current_time
-    return data
-
-def load_bigquery_client(proj_id: str)-> bigquery.Client:
-    return bigquery.Client(project=proj_id)
-    
-def load_data_into_bigquery(table_id: str, data: list[dict], job_config: dict, client: bigquery.Client):
-    job = client.load_table_from_json(data, table_id, job_config=job_config)
-    job.result()
-
-
-
-
-if __name__ == '__main__':
+@asset
+def raw_service_request_311():
     client = load_bigquery_client(GCP_PROJECT_ID)
-
     table_id = f"{GCP_PROJECT_ID}.raw.service_requests_311"
 
     job_config= bigquery.LoadJobConfig(
@@ -85,17 +69,24 @@ if __name__ == '__main__':
                     description='Timestamp when this record was loaded into BigQuery'),
         ]
     )
+    
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m-%d')
 
-    for page in fetch_pages('2026-03-12', 3000):
-
+    for page in fetch_pages(since, 3000):
         if page is None or len(page)==0:
             raise ValueError('There was no data returned from the API')
-
-        time_data = add_timestamp(page)
-
-        load_data_into_bigquery(table_id, time_data, job_config, client)
+        timestamp_data=add_timestamp(page)
+        load_data_into_bigquery(table_id, timestamp_data, job_config, client)
 
 
 
+dbt_project= DbtProject(
+    project_dir= os.path.abspath('dbt_project')
+)
 
-    
+@dbt_assets(manifest=dbt_project.manifest_path)
+def nyc_dbt_assets(context, dbt: DbtCliResource):
+    yield from dbt.cli(['build'], context=context).stream()
+
+
+

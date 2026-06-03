@@ -4,3 +4,6 @@ python-dotenv==1.1.0
 pandas==2.2.3
 dbt-core==1.11.11
 dbt-bigquery==1.11.1
+dagster==1.13.7
+dagster-webserver==1.13.7
+dagster-dbt==0.29.7
