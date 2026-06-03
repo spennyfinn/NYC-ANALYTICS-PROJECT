@@ -1,13 +1,15 @@
 name: dbt CI
 
-on: 
+on:
   pull_request:
     branches:
       - main
+
 jobs:
   dbt-build:
     name: Run dbt build
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,28 +21,43 @@ jobs:
 
       - name: Install dependencies
         run: pip install dbt-core dbt-bigquery
-      
+
       - name: Install dbt packages
         working-directory: dbt_project
         run: dbt deps
-      
+
       - name: Write GCP service account key
         run: |
-          echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY}}' > /tmp/gcp-key.json
+          echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > /tmp/gcp-key.json
 
       - name: Write dbt profiles.yml
         run: |
           mkdir -p ~/.dbt
-          cat <<EOF > ~/.dbt/profiles.yml
-          nyc_analytics_project:
+          python3 - <<'PYEOF'
+          import os
+          project_id = os.environ["GCP_PROJECT_ID"]
+          profiles = f"""nyc_analytics_project:
             target: ci
             outputs:
               ci:
                 type: bigquery
-                ...
+                method: service-account
+                project: {project_id}
                 dataset: analytics_ci
-          EOF
-      
+                keyfile: /tmp/gcp-key.json
+                location: US
+                threads: 4
+          """
+          with open(os.path.expanduser("~/.dbt/profiles.yml"), "w") as f:
+              f.write(profiles)
+          print(f"Written profiles.yml with project: {project_id}")
+          PYEOF
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Verify profiles.yml
+        run: cat ~/.dbt/profiles.yml
+
       - name: Run dbt build
         working-directory: dbt_project
-        run: dbt-build --target ci
+        run: dbt build --target ci
